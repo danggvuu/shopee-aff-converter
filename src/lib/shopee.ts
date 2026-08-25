@@ -10,7 +10,14 @@ export interface AffiliateProvider {
   generateAffiliateLink(inputUrl: string): Promise<AffiliateLinkResult>;
 }
 
+const globalSettings = globalThis as unknown as {
+  activeAffiliateId?: string;
+};
+
 export async function getActiveAffiliateId(): Promise<string> {
+  if (globalSettings.activeAffiliateId) {
+    return globalSettings.activeAffiliateId;
+  }
   try {
     const setting = await prisma.setting.findUnique({
       where: { key: 'SHOPEE_AFFILIATE_ID' },
@@ -31,7 +38,6 @@ export class DirectShopeeAffiliateProvider implements AffiliateProvider {
     try {
       let cleanBaseUrl = inputUrl.split('?')[0];
 
-      // Tối ưu hoá cực đại: Bóc tách ShopID và ItemID để xoá sạch tiêu đề tiếng Việt dài ngoằng
       const itemMatch = cleanBaseUrl.match(/i\.(\d+)\.(\d+)/) || cleanBaseUrl.match(/product\/(\d+)\/(\d+)/);
       if (itemMatch) {
         const shopId = itemMatch[1];
@@ -39,7 +45,6 @@ export class DirectShopeeAffiliateProvider implements AffiliateProvider {
         cleanBaseUrl = `https://shopee.vn/product/${shopId}/${itemId}`;
       }
 
-      // Gắn thông số Affiliate ngắn gọn & chuẩn xác nhất
       const affiliateUrl = `${cleanBaseUrl}?aff_id=${affiliateId}&utm_source=an_${affiliateId}&utm_medium=affiliates`;
 
       return {
