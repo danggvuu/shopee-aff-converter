@@ -56,7 +56,6 @@ export default function Home() {
     }
   };
 
-  // Xác thực mật khẩu Admin
   const handleAdminLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setAdminLoading(true);
@@ -81,7 +80,6 @@ export default function Home() {
     }
   };
 
-  // Lưu Affiliate ID và Mật khẩu mới
   const handleSaveSettings = async (e: React.FormEvent) => {
     e.preventDefault();
     setAdminLoading(true);
@@ -117,7 +115,6 @@ export default function Home() {
 
   return (
     <main className="min-h-screen bg-slate-100 flex items-center justify-center p-4 relative font-sans">
-      {/* Nút Admin Settings góc trên */}
       <button
         onClick={() => {
           setShowAdminModal(true);
@@ -235,13 +232,13 @@ export default function Home() {
                       required
                       value={adminPass}
                       onChange={(e) => setAdminPass(e.target.value)}
-                      placeholder="Nhập mật khẩu (Mặc định: admin123)"
+                      placeholder="Nhập mật khẩu..."
                       className="w-full px-3.5 py-2.5 pr-10 border-2 border-gray-300 rounded-xl outline-none focus:border-orange-500 text-gray-900 bg-white text-sm font-semibold placeholder-gray-400"
                     />
                     <button
                       type="button"
                       onClick={() => setShowPassword(!showPassword)}
-                      className="absolute right-3 top-2.5 text-gray-400 hover:text-gray-700"
+                      className="absolute right-3 top-2.5 text-gray-400 hover:text-gray-700 cursor-pointer"
                     >
                       {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                     </button>
@@ -297,7 +294,7 @@ export default function Home() {
                     <button
                       type="button"
                       onClick={() => setShowNewPass(!showNewPass)}
-                      className="absolute right-3 top-2.5 text-gray-400 hover:text-gray-700"
+                      className="absolute right-3 top-2.5 text-gray-400 hover:text-gray-700 cursor-pointer"
                     >
                       {showNewPass ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                     </button>
