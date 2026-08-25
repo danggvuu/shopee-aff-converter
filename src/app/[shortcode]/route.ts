@@ -8,14 +8,15 @@ export async function GET(request: Request, { params }: { params: { shortcode: s
     const { shortcode } = params;
     const affiliateId = await getActiveAffiliateId();
 
-    // 1. Kiểm tra nếu là dạng Base36 siêu ngắn (VD: b329-3z9r0q) -> Giải mã tức thì 0.001s
+    // 1. Dạng Base36 siêu ngắn -> Ép nhảy thẳng vào App Shopee bằng Universal Link
     if (shortcode.includes('-')) {
       const parts = shortcode.split('-');
       if (parts.length === 2) {
         try {
           const shopId = BigInt(parseInt(parts[0], 36)).toString();
           const itemId = BigInt(parseInt(parts[1], 36)).toString();
-          const targetShopeeUrl = `https://shopee.vn/product/${shopId}/${itemId}?aff_id=${affiliateId}&utm_source=an_${affiliateId}&utm_medium=affiliates`;
+          // Cấu trúc Universal Link kích hoạt mở App Shopee trên iOS và Android
+          const targetShopeeUrl = `https://shopee.vn/universal-link/product/${shopId}/${itemId}?aff_id=${affiliateId}&utm_source=an_${affiliateId}&utm_medium=affiliates`;
           return NextResponse.redirect(targetShopeeUrl, { status: 302 });
         } catch (e) {
           console.warn('[BASE36_DECODE_ERR]', e);
@@ -23,7 +24,7 @@ export async function GET(request: Request, { params }: { params: { shortcode: s
       }
     }
 
-    // 2. Tra cứu trong Database nếu là mã ngẫu nhiên
+    // 2. Tra cứu trong Database nếu có
     try {
       const link = await prisma.link.findUnique({
         where: { shortCode: shortcode },
@@ -41,12 +42,12 @@ export async function GET(request: Request, { params }: { params: { shortcode: s
       console.warn('[DB_LOOKUP_SKIP]', dbErr);
     }
 
-    // 3. Tương thích ngược với các link sp_ cũ
+    // 3. Tương thích ngược link cũ
     if (shortcode.startsWith('sp_')) {
       const parts = shortcode.replace('sp_', '').split('_');
       if (parts.length === 2) {
         const [shopId, itemId] = parts;
-        const targetShopeeUrl = `https://shopee.vn/product/${shopId}/${itemId}?aff_id=${affiliateId}&utm_source=an_${affiliateId}&utm_medium=affiliates`;
+        const targetShopeeUrl = `https://shopee.vn/universal-link/product/${shopId}/${itemId}?aff_id=${affiliateId}&utm_source=an_${affiliateId}&utm_medium=affiliates`;
         return NextResponse.redirect(targetShopeeUrl, { status: 302 });
       }
     }

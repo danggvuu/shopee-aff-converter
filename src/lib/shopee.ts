@@ -42,7 +42,8 @@ export class DirectShopeeAffiliateProvider implements AffiliateProvider {
       if (itemMatch) {
         const shopId = itemMatch[1];
         const itemId = itemMatch[2];
-        cleanBaseUrl = `https://shopee.vn/product/${shopId}/${itemId}`;
+        // Sử dụng Universal Link chính thức của Shopee để ÉP MỞ THẲNG APP SHOPEE TRÊN ĐIỆN THOẠI
+        cleanBaseUrl = `https://shopee.vn/universal-link/product/${shopId}/${itemId}`;
       }
 
       const affiliateUrl = `${cleanBaseUrl}?aff_id=${affiliateId}&utm_source=an_${affiliateId}&utm_medium=affiliates`;
