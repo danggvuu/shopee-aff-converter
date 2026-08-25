@@ -10,7 +10,6 @@ export interface AffiliateProvider {
   generateAffiliateLink(inputUrl: string): Promise<AffiliateLinkResult>;
 }
 
-// Get active Affiliate ID from DB Setting or Environment Variable or Default
 export async function getActiveAffiliateId(): Promise<string> {
   try {
     const setting = await prisma.setting.findUnique({
@@ -30,35 +29,29 @@ export class DirectShopeeAffiliateProvider implements AffiliateProvider {
     const affiliateId = await getActiveAffiliateId();
     
     try {
-      const parsedUrl = new URL(inputUrl);
-      
-      // Clean previous affiliate & tracking parameters from previous owners
-      const paramsToRemove = [
-        'utm_source', 'utm_medium', 'utm_campaign', 'utm_term', 'utm_content',
-        'aff_id', 'af_sub_siteid', 'af_siteid', 'af_sub_id', 'af_click_lookback',
-        'smtt', 'deep_and_deferred'
-      ];
-      paramsToRemove.forEach(p => parsedUrl.searchParams.delete(p));
+      let cleanBaseUrl = inputUrl.split('?')[0];
 
-      // Append Admin's Shopee Affiliate Tracking parameters
-      parsedUrl.searchParams.set('utm_source', `an_${affiliateId}`);
-      parsedUrl.searchParams.set('utm_medium', 'affiliates');
-      parsedUrl.searchParams.set('utm_campaign', `an_${affiliateId}`);
-      parsedUrl.searchParams.set('aff_id', affiliateId);
-      parsedUrl.searchParams.set('af_sub_siteid', affiliateId);
-      parsedUrl.searchParams.set('af_siteid', `an_${affiliateId}`);
+      // Tối ưu hoá cực đại: Bóc tách ShopID và ItemID để xoá sạch tiêu đề tiếng Việt dài ngoằng
+      const itemMatch = cleanBaseUrl.match(/i\.(\d+)\.(\d+)/) || cleanBaseUrl.match(/product\/(\d+)\/(\d+)/);
+      if (itemMatch) {
+        const shopId = itemMatch[1];
+        const itemId = itemMatch[2];
+        cleanBaseUrl = `https://shopee.vn/product/${shopId}/${itemId}`;
+      }
+
+      // Gắn thông số Affiliate ngắn gọn & chuẩn xác nhất
+      const affiliateUrl = `${cleanBaseUrl}?aff_id=${affiliateId}&utm_source=an_${affiliateId}&utm_medium=affiliates`;
 
       return {
         originalUrl: inputUrl,
-        affiliateUrl: parsedUrl.toString(),
+        affiliateUrl,
         affiliateId,
       };
     } catch (err) {
-      // Fallback string append if URL parsing fails
       const sep = inputUrl.includes('?') ? '&' : '?';
       return {
         originalUrl: inputUrl,
-        affiliateUrl: `${inputUrl}${sep}utm_source=an_${affiliateId}&utm_medium=affiliates&aff_id=${affiliateId}`,
+        affiliateUrl: `${inputUrl}${sep}aff_id=${affiliateId}&utm_source=an_${affiliateId}&utm_medium=affiliates`,
         affiliateId,
       };
     }
