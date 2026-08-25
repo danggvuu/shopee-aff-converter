@@ -15,14 +15,14 @@ export async function POST(request: Request) {
   try {
     const ip = request.headers.get('x-forwarded-for') ?? '127.0.0.1';
     
-    // Rate Limiting (chống spam)
+    // Rate Limiting
     try {
       const { success } = await ratelimit.limit(ip);
       if (!success) {
-        return NextResponse.json({ success: false, error: { code: 'RATE_LIMIT_EXCEEDED', message: 'Bạn đã thử quá nhiều lần, vui lòng đợi 1 phút.' } }, { status: 429 });
+        return NextResponse.json({ success: false, error: { code: 'RATE_LIMIT_EXCEEDED', message: 'Bạn thao tác quá nhanh, vui lòng đợi 1 phút.' } }, { status: 429 });
       }
     } catch (e) {
-      console.warn('[RATELIMIT_BYPASS_DEV]', e);
+      console.warn('[RATELIMIT_BYPASS]', e);
     }
 
     const body = await request.json();
@@ -34,25 +34,20 @@ export async function POST(request: Request) {
 
     const inputUrl = parseResult.data.url;
     
-    // 1. Tạo link Affiliate chuẩn
+    // 1. Tạo link Affiliate chuẩn Shopee
     const provider = getAffiliateProvider();
     const result = await provider.generateAffiliateLink(inputUrl);
 
-    // 2. Tạo link rút gọn thương hiệu siêu ngắn
+    // 2. Tạo link rút gọn siêu ngắn (chỉ 5 ký tự ngẫu nhiên)
     const host = request.headers.get('host') || 'shopee-aff-converter.vercel.app';
     const proto = host.includes('localhost') ? 'http' : 'https';
     const appUrl = `${proto}://${host}`;
 
-    let shortCode = '';
-    const itemMatch = inputUrl.match(/i\.(\d+)\.(\d+)/) || inputUrl.match(/product\/(\d+)\/(\d+)/);
-    if (itemMatch) {
-      // Dạng rút gọn siêu tốc không phụ thuộc Database
-      shortCode = `sp_${itemMatch[1]}_${itemMatch[2]}`;
-    } else {
-      shortCode = generateShortCode(6);
-    }
+    const shortCode = generateShortCode(5); // VD: x7K9a
+    let finalShortUrl = `${appUrl}/${shortCode}`;
 
-    // 3. Thử lưu vào Database (để tracking số click nếu DB online)
+    // Lưu vào Database để điều hướng
+    let dbSuccess = false;
     try {
       await prisma.link.create({
         data: {
@@ -61,11 +56,27 @@ export async function POST(request: Request) {
           affiliateUrl: result.affiliateUrl,
         },
       });
+      dbSuccess = true;
     } catch (dbErr) {
-      console.warn('[DB_WRITE_LOG]', dbErr);
+      console.warn('[DB_SAVE_FAILED]', dbErr);
     }
 
-    const finalShortUrl = `${appUrl}/${shortCode}`;
+    // Nếu DB chưa kết nối được, tự động gọi dịch vụ rút gọn TinyURL miễn phí làm fallback
+    if (!dbSuccess) {
+      try {
+        const tinyRes = await fetch(`https://tinyurl.com/api-create.php?url=${encodeURIComponent(result.affiliateUrl)}`, {
+          signal: AbortSignal.timeout(3000),
+        });
+        if (tinyRes.ok) {
+          const tinyUrl = await tinyRes.text();
+          if (tinyUrl && tinyUrl.startsWith('http')) {
+            finalShortUrl = tinyUrl;
+          }
+        }
+      } catch (tinyErr) {
+        console.warn('[TINYURL_FALLBACK_FAILED]', tinyErr);
+      }
+    }
 
     return NextResponse.json({
       success: true,
@@ -79,6 +90,6 @@ export async function POST(request: Request) {
 
   } catch (error: any) {
     console.error('[API_GENERATE_ERROR]', error);
-    return NextResponse.json({ success: false, error: { code: 'INTERNAL_ERROR', message: 'Không thể tạo link. Vui lòng kiểm tra lại đường dẫn Shopee!' } }, { status: 500 });
+    return NextResponse.json({ success: false, error: { code: 'INTERNAL_ERROR', message: 'Không thể tạo link. Vui lòng thử lại!' } }, { status: 500 });
   }
 }
