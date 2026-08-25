@@ -1,25 +1,42 @@
 export const dynamic = 'force-dynamic';
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
+import { getActiveAffiliateId } from '@/lib/shopee';
 
 export async function GET(request: Request, { params }: { params: { shortcode: string } }) {
   try {
     const { shortcode } = params;
+    const affiliateId = await getActiveAffiliateId();
 
-    const link = await prisma.link.findUnique({
-      where: { shortCode: shortcode },
-    });
-
-    if (!link || link.status !== 'ACTIVE') {
-      return NextResponse.redirect(new URL('/', request.url));
+    // 1. Kiểm tra nếu là dạng mã rút gọn thông minh trực tiếp (sp_ShopID_ItemID)
+    if (shortcode.startsWith('sp_')) {
+      const parts = shortcode.replace('sp_', '').split('_');
+      if (parts.length === 2) {
+        const [shopId, itemId] = parts;
+        const targetShopeeUrl = `https://shopee.vn/product/${shopId}/${itemId}?aff_id=${affiliateId}&utm_source=an_${affiliateId}&utm_medium=affiliates`;
+        return NextResponse.redirect(targetShopeeUrl, { status: 302 });
+      }
     }
 
-    prisma.link.update({
-      where: { id: link.id },
-      data: { clickCount: { increment: 1 } },
-    }).catch(console.error);
+    // 2. Tra cứu trong Database nếu có lưu shortcode ngẫu nhiên
+    try {
+      const link = await prisma.link.findUnique({
+        where: { shortCode: shortcode },
+      });
 
-    return NextResponse.redirect(link.affiliateUrl, { status: 302 });
+      if (link && link.status === 'ACTIVE') {
+        prisma.link.update({
+          where: { id: link.id },
+          data: { clickCount: { increment: 1 } },
+        }).catch(console.error);
+
+        return NextResponse.redirect(link.affiliateUrl, { status: 302 });
+      }
+    } catch (dbErr) {
+      console.warn('[DB_LOOKUP_SKIP]', dbErr);
+    }
+
+    return NextResponse.redirect(new URL('/', request.url));
   } catch (error) {
     console.error('[REDIRECT_ERROR]', error);
     return NextResponse.redirect(new URL('/', request.url));

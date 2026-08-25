@@ -38,30 +38,39 @@ export async function POST(request: Request) {
     const provider = getAffiliateProvider();
     const result = await provider.generateAffiliateLink(inputUrl);
 
-    // 2. Thử lưu vào Database để làm Shortcode
-    let finalUrl = result.affiliateUrl;
+    // 2. Tạo link rút gọn thương hiệu siêu ngắn
+    const host = request.headers.get('host') || 'shopee-aff-converter.vercel.app';
+    const proto = host.includes('localhost') ? 'http' : 'https';
+    const appUrl = `${proto}://${host}`;
+
+    let shortCode = '';
+    const itemMatch = inputUrl.match(/i\.(\d+)\.(\d+)/) || inputUrl.match(/product\/(\d+)\/(\d+)/);
+    if (itemMatch) {
+      // Dạng rút gọn siêu tốc không phụ thuộc Database
+      shortCode = `sp_${itemMatch[1]}_${itemMatch[2]}`;
+    } else {
+      shortCode = generateShortCode(6);
+    }
+
+    // 3. Thử lưu vào Database (để tracking số click nếu DB online)
     try {
-      const shortCode = generateShortCode();
-      const link = await prisma.link.create({
+      await prisma.link.create({
         data: {
           shortCode,
           originalUrl: inputUrl,
           affiliateUrl: result.affiliateUrl,
         },
       });
-
-      const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://shopee-aff-converter.vercel.app';
-      finalUrl = `${appUrl}/${link.shortCode}`;
     } catch (dbErr) {
-      console.warn('[DB_WRITE_WARNING] Database chưa sẵn sàng, trả về link affiliate trực tiếp:', dbErr);
-      // Fallback trả thẳng link affiliate có gắn mã sếp
-      finalUrl = result.affiliateUrl;
+      console.warn('[DB_WRITE_LOG]', dbErr);
     }
+
+    const finalShortUrl = `${appUrl}/${shortCode}`;
 
     return NextResponse.json({
       success: true,
       data: {
-        shortUrl: finalUrl,
+        shortUrl: finalShortUrl,
         affiliateUrl: result.affiliateUrl,
         originalUrl: inputUrl,
         affiliateId: result.affiliateId
