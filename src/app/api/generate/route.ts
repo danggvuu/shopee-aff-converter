@@ -38,16 +38,23 @@ export async function POST(request: Request) {
     const provider = getAffiliateProvider();
     const result = await provider.generateAffiliateLink(inputUrl);
 
-    // 2. Tạo link rút gọn siêu ngắn (chỉ 5 ký tự ngẫu nhiên)
+    // 2. Tạo Shortcode thương hiệu siêu ngắn bằng thuật toán Base36 (Không bao giờ cần trung gian, không dính quảng cáo)
     const host = request.headers.get('host') || 'shopee-aff-converter.vercel.app';
     const proto = host.includes('localhost') ? 'http' : 'https';
     const appUrl = `${proto}://${host}`;
 
-    const shortCode = generateShortCode(5); // VD: x7K9a
-    let finalShortUrl = `${appUrl}/${shortCode}`;
+    let shortCode = '';
+    const itemMatch = inputUrl.match(/i\.(\d+)\.(\d+)/) || inputUrl.match(/product\/(\d+)\/(\d+)/);
+    if (itemMatch) {
+      // Mã hóa ngắn gọn: ShopID + ItemID sang Base36 (chỉ dài tầm 8-10 ký tự)
+      const shopBase36 = BigInt(itemMatch[1]).toString(36);
+      const itemBase36 = BigInt(itemMatch[2]).toString(36);
+      shortCode = `${shopBase36}-${itemBase36}`;
+    } else {
+      shortCode = generateShortCode(5);
+    }
 
-    // Lưu vào Database để điều hướng
-    let dbSuccess = false;
+    // 3. Thử lưu vào Database nếu có
     try {
       await prisma.link.create({
         data: {
@@ -56,27 +63,12 @@ export async function POST(request: Request) {
           affiliateUrl: result.affiliateUrl,
         },
       });
-      dbSuccess = true;
     } catch (dbErr) {
-      console.warn('[DB_SAVE_FAILED]', dbErr);
+      console.warn('[DB_SAVE_LOG]', dbErr);
     }
 
-    // Nếu DB chưa kết nối được, tự động gọi dịch vụ rút gọn TinyURL miễn phí làm fallback
-    if (!dbSuccess) {
-      try {
-        const tinyRes = await fetch(`https://tinyurl.com/api-create.php?url=${encodeURIComponent(result.affiliateUrl)}`, {
-          signal: AbortSignal.timeout(3000),
-        });
-        if (tinyRes.ok) {
-          const tinyUrl = await tinyRes.text();
-          if (tinyUrl && tinyUrl.startsWith('http')) {
-            finalShortUrl = tinyUrl;
-          }
-        }
-      } catch (tinyErr) {
-        console.warn('[TINYURL_FALLBACK_FAILED]', tinyErr);
-      }
-    }
+    // Link chính chủ của sếp 100%, 0 giây chuyển hướng, không qua TinyURL
+    const finalShortUrl = `${appUrl}/${shortCode}`;
 
     return NextResponse.json({
       success: true,
