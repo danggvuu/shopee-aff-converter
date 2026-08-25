@@ -17,3 +17,9 @@ model Link {
   updatedAt     DateTime @updatedAt
   status        String   @default("ACTIVE")
 }
+
+model Setting {
+  key       String   @id
+  value     String
+  updatedAt DateTime @updatedAt
+}
