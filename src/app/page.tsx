@@ -1,14 +1,16 @@
 'use client';
 
 import { useState } from 'react';
-import { Link, Copy, CheckCircle2, AlertCircle, Loader2, Settings, ShieldCheck, X, Eye, EyeOff, KeyRound, Check } from 'lucide-react';
+import { Link, Copy, CheckCircle2, AlertCircle, Loader2, Settings, ShieldCheck, X, Eye, EyeOff, KeyRound, Check, ExternalLink, Sparkles } from 'lucide-react';
 
 export default function Home() {
   const [inputUrl, setInputUrl] = useState('');
   const [loading, setLoading] = useState(false);
-  const [resultUrl, setResultUrl] = useState('');
+  const [resultShortUrl, setResultShortUrl] = useState('');
+  const [resultDirectUrl, setResultDirectUrl] = useState('');
   const [error, setError] = useState('');
-  const [copied, setCopied] = useState(false);
+  const [copiedShort, setCopiedShort] = useState(false);
+  const [copiedDirect, setCopiedDirect] = useState(false);
 
   // Admin Modal States
   const [showAdminModal, setShowAdminModal] = useState(false);
@@ -24,9 +26,11 @@ export default function Home() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
-    setResultUrl('');
+    setResultShortUrl('');
+    setResultDirectUrl('');
     setLoading(true);
-    setCopied(false);
+    setCopiedShort(false);
+    setCopiedDirect(false);
 
     try {
       const res = await fetch('/api/generate', {
@@ -39,7 +43,8 @@ export default function Home() {
       if (!data.success) {
         setError(data.error?.message || 'Có lỗi xảy ra, vui lòng thử lại.');
       } else {
-        setResultUrl(data.data.shortUrl);
+        setResultShortUrl(data.data.shortUrl);
+        setResultDirectUrl(data.data.affiliateUrl);
       }
     } catch (err) {
       setError('Lỗi kết nối tới máy chủ.');
@@ -48,11 +53,16 @@ export default function Home() {
     }
   };
 
-  const copyToClipboard = () => {
-    if (resultUrl) {
-      navigator.clipboard.writeText(resultUrl);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
+  const copyToClipboard = (text: string, type: 'short' | 'direct') => {
+    if (text) {
+      navigator.clipboard.writeText(text);
+      if (type === 'short') {
+        setCopiedShort(true);
+        setTimeout(() => setCopiedShort(false), 2000);
+      } else {
+        setCopiedDirect(true);
+        setTimeout(() => setCopiedDirect(false), 2000);
+      }
     }
   };
 
@@ -142,12 +152,12 @@ export default function Home() {
                 Dán link sản phẩm Shopee vào đây
               </label>
               <input
-                type="url"
+                type="text"
                 required
                 value={inputUrl}
                 onChange={(e) => setInputUrl(e.target.value)}
-                placeholder="https://shopee.vn/..."
-                className="w-full px-4 py-3 rounded-xl border-2 border-gray-300 focus:border-orange-500 outline-none transition text-gray-900 bg-white placeholder-gray-400 font-medium"
+                placeholder="Dán link shopee.vn hoặc link từ App điện thoại..."
+                className="w-full px-4 py-3 rounded-xl border-2 border-gray-300 focus:border-orange-500 outline-none transition text-gray-900 bg-white placeholder-gray-400 font-medium text-sm"
               />
             </div>
 
@@ -174,28 +184,66 @@ export default function Home() {
             </button>
           </form>
 
-          {resultUrl && (
-            <div className="mt-6 p-4 border-2 border-green-300 bg-green-50 rounded-2xl space-y-3">
-              <div className="flex items-center gap-2 text-green-800 font-bold text-sm">
-                <CheckCircle2 className="w-5 h-5 text-green-600" />
-                <span>Link Affiliate của bạn đã sẵn sàng!</span>
+          {/* Kết quả tạo link */}
+          {resultShortUrl && (
+            <div className="mt-6 space-y-4">
+              <div className="flex items-center gap-2 text-green-800 font-bold text-sm bg-green-100/70 p-2.5 rounded-xl border border-green-200">
+                <CheckCircle2 className="w-5 h-5 text-green-600 shrink-0" />
+                <span>Tạo link Affiliate thành công!</span>
               </div>
-              <div className="flex items-center gap-2">
-                <input
-                  type="text"
-                  readOnly
-                  value={resultUrl}
-                  className="flex-1 bg-white border border-gray-300 rounded-xl px-3.5 py-2.5 text-gray-900 text-sm font-semibold outline-none shadow-sm select-all"
-                />
-                <button
-                  onClick={copyToClipboard}
-                  className="bg-white border border-gray-300 hover:bg-orange-50 hover:text-orange-600 text-gray-800 p-2.5 rounded-xl transition shadow-sm active:scale-95 shrink-0 cursor-pointer"
-                  title="Sao chép link"
-                >
-                  {copied ? <Check className="w-5 h-5 text-green-600" /> : <Copy className="w-5 h-5" />}
-                </button>
+
+              {/* Lựa chọn 1: Link Rút Gọn Web (Khuyên dùng) */}
+              <div className="p-3.5 border-2 border-orange-200 bg-orange-50/60 rounded-xl space-y-2">
+                <div className="flex items-center justify-between text-xs font-bold text-orange-900">
+                  <span className="flex items-center gap-1.5">
+                    <Sparkles className="w-3.5 h-3.5 text-orange-500" />
+                    LINK RÚT GỌN (CHỐNG CHẶN FB/ZALO):
+                  </span>
+                  <span className="text-[10px] bg-orange-200 text-orange-800 px-1.5 py-0.5 rounded font-semibold">Khuyên dùng</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="text"
+                    readOnly
+                    value={resultShortUrl}
+                    className="flex-1 bg-white border border-gray-300 rounded-lg px-3 py-2 text-gray-900 text-xs font-semibold outline-none select-all"
+                  />
+                  <button
+                    onClick={() => copyToClipboard(resultShortUrl, 'short')}
+                    className="bg-orange-500 hover:bg-orange-600 text-white p-2 rounded-lg transition shadow-sm active:scale-95 shrink-0 cursor-pointer flex items-center gap-1 text-xs font-bold"
+                    title="Sao chép link rút gọn"
+                  >
+                    {copiedShort ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+                    <span>{copiedShort ? 'Đã copy' : 'Copy'}</span>
+                  </button>
+                </div>
               </div>
-              {copied && <p className="text-xs text-green-700 font-bold text-center">Đã sao chép vào bộ nhớ tạm!</p>}
+
+              {/* Lựa chọn 2: Link Trực Tiếp shopee.vn */}
+              <div className="p-3.5 border border-gray-200 bg-gray-50 rounded-xl space-y-2">
+                <div className="flex items-center justify-between text-xs font-bold text-gray-700">
+                  <span className="flex items-center gap-1.5">
+                    <ExternalLink className="w-3.5 h-3.5 text-gray-500" />
+                    LINK TRỰC TIẾP SHOPEE.VN (LINK GỐC):
+                  </span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="text"
+                    readOnly
+                    value={resultDirectUrl}
+                    className="flex-1 bg-white border border-gray-300 rounded-lg px-3 py-2 text-gray-700 text-xs font-medium outline-none select-all"
+                  />
+                  <button
+                    onClick={() => copyToClipboard(resultDirectUrl, 'direct')}
+                    className="bg-gray-800 hover:bg-black text-white p-2 rounded-lg transition shadow-sm active:scale-95 shrink-0 cursor-pointer flex items-center gap-1 text-xs font-bold"
+                    title="Sao chép link shopee.vn"
+                  >
+                    {copiedDirect ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+                    <span>{copiedDirect ? 'Đã copy' : 'Copy'}</span>
+                  </button>
+                </div>
+              </div>
             </div>
           )}
         </div>
