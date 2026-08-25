@@ -5,17 +5,32 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
 }
 
-export function isValidShopeeUrl(url: string): boolean {
+// Trích xuất link sạch từ đoạn văn bản người dùng copy trên App điện thoại
+export function extractUrlFromText(text: string): string {
+  if (!text) return '';
+  const urlMatch = text.match(/https?:\/\/[^\s]+/i);
+  return urlMatch ? urlMatch[0].trim() : text.trim();
+}
+
+export function isValidShopeeUrl(rawInput: string): boolean {
   try {
-    const parsedUrl = new URL(url);
-    const validDomains = ['shopee.vn', 'www.shopee.vn', 'shope.ee', 'vn.shp.ee', 's.shopee.vn'];
-    return validDomains.includes(parsedUrl.hostname);
+    const cleanUrl = extractUrlFromText(rawInput);
+    const parsedUrl = new URL(cleanUrl);
+    const validDomains = [
+      'shopee.vn', 
+      'www.shopee.vn', 
+      'shope.ee', 
+      'vn.shp.ee', 
+      's.shopee.vn',
+      'my.shp.ee',
+      'sg.shp.ee'
+    ];
+    return validDomains.some(d => parsedUrl.hostname.toLowerCase().includes(d));
   } catch {
     return false;
   }
 }
 
-// Sinh mã ngẫu nhiên siêu ngắn 4-5 ký tự dễ nhớ
 export function generateShortCode(length: number = 5): string {
   const chars = '23456789abcdefghjkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ';
   let result = '';

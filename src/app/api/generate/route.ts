@@ -2,12 +2,12 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { ratelimit } from '@/lib/rate-limit';
 import { getAffiliateProvider } from '@/lib/shopee';
-import { isValidShopeeUrl, generateShortCode } from '@/lib/utils';
+import { isValidShopeeUrl, generateShortCode, extractUrlFromText } from '@/lib/utils';
 import { z } from 'zod';
 
 const generateSchema = z.object({
-  url: z.string().url().refine(isValidShopeeUrl, {
-    message: "Chỉ hỗ trợ URL từ shopee.vn hoặc shope.ee",
+  url: z.string().min(5).refine(isValidShopeeUrl, {
+    message: "Chỉ hỗ trợ link sản phẩm Shopee hợp lệ (shopee.vn, s.shopee.vn, vn.shp.ee)",
   }),
 });
 
@@ -32,21 +32,21 @@ export async function POST(request: Request) {
       return NextResponse.json({ success: false, error: { code: 'INVALID_URL', message: parseResult.error.issues[0].message } }, { status: 400 });
     }
 
-    const inputUrl = parseResult.data.url;
+    const rawInput = parseResult.data.url;
+    const cleanUrl = extractUrlFromText(rawInput);
     
-    // 1. Tạo link Affiliate chuẩn Shopee
+    // 1. Tạo link Affiliate chuẩn Shopee (Hỗ trợ giải mã link App di động)
     const provider = getAffiliateProvider();
-    const result = await provider.generateAffiliateLink(inputUrl);
+    const result = await provider.generateAffiliateLink(cleanUrl);
 
-    // 2. Tạo Shortcode thương hiệu siêu ngắn bằng thuật toán Base36 (Không bao giờ cần trung gian, không dính quảng cáo)
+    // 2. Tạo Shortcode thương hiệu
     const host = request.headers.get('host') || 'shopee-aff-converter.vercel.app';
     const proto = host.includes('localhost') ? 'http' : 'https';
     const appUrl = `${proto}://${host}`;
 
     let shortCode = '';
-    const itemMatch = inputUrl.match(/i\.(\d+)\.(\d+)/) || inputUrl.match(/product\/(\d+)\/(\d+)/);
+    const itemMatch = result.affiliateUrl.match(/product\/(\d+)\/(\d+)/) || cleanUrl.match(/i\.(\d+)\.(\d+)/);
     if (itemMatch) {
-      // Mã hóa ngắn gọn: ShopID + ItemID sang Base36 (chỉ dài tầm 8-10 ký tự)
       const shopBase36 = BigInt(itemMatch[1]).toString(36);
       const itemBase36 = BigInt(itemMatch[2]).toString(36);
       shortCode = `${shopBase36}-${itemBase36}`;
@@ -54,12 +54,12 @@ export async function POST(request: Request) {
       shortCode = generateShortCode(5);
     }
 
-    // 3. Thử lưu vào Database nếu có
+    // 3. Lưu vào Database
     try {
       await prisma.link.create({
         data: {
           shortCode,
-          originalUrl: inputUrl,
+          originalUrl: cleanUrl,
           affiliateUrl: result.affiliateUrl,
         },
       });
@@ -67,7 +67,6 @@ export async function POST(request: Request) {
       console.warn('[DB_SAVE_LOG]', dbErr);
     }
 
-    // Link chính chủ của sếp 100%, 0 giây chuyển hướng, không qua TinyURL
     const finalShortUrl = `${appUrl}/${shortCode}`;
 
     return NextResponse.json({
@@ -75,13 +74,13 @@ export async function POST(request: Request) {
       data: {
         shortUrl: finalShortUrl,
         affiliateUrl: result.affiliateUrl,
-        originalUrl: inputUrl,
+        originalUrl: cleanUrl,
         affiliateId: result.affiliateId
       }
     });
 
   } catch (error: any) {
     console.error('[API_GENERATE_ERROR]', error);
-    return NextResponse.json({ success: false, error: { code: 'INTERNAL_ERROR', message: 'Không thể tạo link. Vui lòng thử lại!' } }, { status: 500 });
+    return NextResponse.json({ success: false, error: { code: 'INTERNAL_ERROR', message: 'Không thể tạo link. Vui lòng kiểm tra lại link Shopee!' } }, { status: 500 });
   }
 }
